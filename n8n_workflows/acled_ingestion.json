@@ -1,0 +1,226 @@
+{
+  "name": "OSINT ACLED Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "e67e37a3-4886-444a-9b48-18eb260844f2",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "action": "calculate",
+        "value": "={{ $now }}",
+        "duration": -3,
+        "timeUnit": "days",
+        "dataPropertyName": "date_from"
+      },
+      "id": "bb63b9ca-7f28-4421-a3f2-14eb00de3b33",
+      "name": "Calculate Start Date",
+      "type": "n8n-nodes-base.dateTime",
+      "typeVersion": 2,
+      "position": [
+        460,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.acleddata.com/acled/read/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "YOUR_ACLED_API_KEY_HERE"
+            },
+            {
+              "name": "email",
+              "value": "YOUR_EMAIL_HERE"
+            },
+            {
+              "name": "event_date",
+              "value": "={{ $json.date_from ? $json.date_from.toFormat('yyyy-MM-dd') : '' }}"
+            },
+            {
+              "name": "event_date_where",
+              "value": ">="
+            },
+            {
+              "name": "region",
+              "value": "Middle East"
+            }
+          ]
+        },
+        "options": {
+          "neverError": true
+        }
+      },
+      "continueOnFail": true,
+      "id": "18c8e100-c97b-4a57-b4d4-ff51052608e6",
+      "name": "Fetch ACLED Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        680,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "id": "b0a0498a-2be5-4f57-8ba5-3a0cb1be0d5f",
+      "name": "Split Data Array",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        900,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b1ec0cd2-0fbc-4a4b-a25e-3c22b9c24095",
+              "name": "title",
+              "value": "={{ (($json.sub_event_type || 'Incident') + ' in ' + ($json.location || 'Unknown')).substring(0, 200) }}",
+              "type": "string"
+            },
+            {
+              "id": "40b1784c-32b0-4ecb-99d8-9df8e176378e",
+              "name": "description",
+              "value": "={{ $json.notes || 'ACLED Incident report' }}\nFatalities: {{ $json.fatalities || 0 }}\nActors: {{ $json.actor1 || 'Unknown' }} vs {{ $json.actor2 || 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "f55c829e-4e4b-4a0b-8d54-8c886fb5f096",
+              "name": "source_name",
+              "value": "ACLED ({{ $json.source || 'Official' }})",
+              "type": "string"
+            },
+            {
+              "id": "b20d31f9-90b5-4b15-9016-e41c40a58a6a",
+              "name": "source_url",
+              "value": "https://acleddata.com",
+              "type": "string"
+            },
+            {
+              "id": "50c3d9b0-464a-4d2d-8302-3c82e666a337",
+              "name": "is_darknet",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "c1f7a18b-57e3-4700-9851-d41935560940",
+              "name": "date_reported",
+              "value": "={{ $json.event_date ? $json.event_date + 'T00:00:00Z' : new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c5cfeb57-a4bb-4e96-a836-8a5ff664c6dc",
+      "name": "Map to Schema",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/v1/incidents",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "continueOnFail": true,
+      "id": "0d6118d0-2f16-433f-a36c-94770fb57c12",
+      "name": "Send to FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Calculate Start Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Start Date": {
+      "main": [
+        [
+          {
+            "node": "Fetch ACLED Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch ACLED Data": {
+      "main": [
+        [
+          {
+            "node": "Split Data Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Data Array": {
+      "main": [
+        [
+          {
+            "node": "Map to Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map to Schema": {
+      "main": [
+        [
+          {
+            "node": "Send to FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

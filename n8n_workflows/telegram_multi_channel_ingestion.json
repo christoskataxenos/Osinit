@@ -1,0 +1,141 @@
+{
+  "name": "OSINT Telegram Multi-Channel Ingestion & Auto-Translation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "10000000-0000-0000-0000-000000000001",
+      "name": "Schedule Trigger (Every 15m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { channel: \"MAKS23_NAFO\" } },\n  { json: { channel: \"hueviyherson\" } },\n  { json: { channel: \"liveukraine_media\" } },\n  { json: { channel: \"supernova_plus\" } },\n  { json: { channel: \"pravdaGerashchenko_en\" } },\n  { json: { channel: \"United24media\" } },\n  { json: { channel: \"svoiua\" } },\n  { json: { channel: \"wargonzo\" } },\n  { json: { channel: \"rageintel\" } }\n];"
+      },
+      "id": "10000000-0000-0000-0000-000000000002",
+      "name": "Channel List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://t.me/s/{{ $json.channel }}",
+        "options": {
+          "neverError": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "continueOnFail": true,
+      "id": "10000000-0000-0000-0000-000000000003",
+      "name": "Fetch Channel HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itemJson = ($input.item && $input.item.json) ? $input.item.json : {};\nconst html = itemJson.body || \"\";\nlet defaultChannel = \"Telegram\";\ntry {\n  defaultChannel = $node[\"Channel List\"].json.channel || \"Telegram\";\n} catch (e) {}\nconst results = [];\nif (!html) return results;\n\nasync function translateToEnglish(text) {\n  if (!text || text.trim().length === 0) return text;\n  try {\n    const chunk = text.substring(0, 1500);\n    const url = \"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=\" + encodeURIComponent(chunk);\n    const res = await fetch(url);\n    const data = await res.json();\n    if (data && data[0]) {\n      return data[0].map(item => item[0]).join(\"\");\n    }\n  } catch (err) {}\n  return text;\n}\n\nconst wraps = html.split('<div class=\"tgme_widget_message_wrap');\nfor (let i = 1; i < wraps.length; i++) {\n  const wrap = wraps[i];\n  const postMatch = /data-post=\"([^\"]+)\"/.exec(wrap);\n  if (!postMatch) continue;\n  const postPath = postMatch[1];\n\n  const textMatch = /<div class=\"tgme_widget_message_text[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/.exec(wrap);\n  const rawText = textMatch ? textMatch[1] : \"\";\n  const cleanText = rawText.replace(/<[^>]+>/g, '').trim();\n  if (!cleanText) continue;\n\n  const timeMatch = /<time[^>]*datetime=\"([^\"]+)\"/.exec(wrap);\n  const isoDate = timeMatch ? timeMatch[1] : new Date().toISOString();\n\n  const channelUsername = postPath ? postPath.split('/')[0] : defaultChannel;\n  const translatedText = await translateToEnglish(cleanText);\n  const lines = translatedText.split('\\n').map(l => l.trim()).filter(Boolean);\n  const title = lines[0] ? lines[0].substring(0, 200) : \"Telegram Incident Report\";\n\n  results.push({\n    json: {\n      title: `[@${channelUsername}] ${title}`,\n      description: translatedText,\n      source_name: `Telegram (@${channelUsername})`,\n      source_url: `https://t.me/${postPath}`,\n      is_darknet: false,\n      date_reported: isoDate\n    }\n  });\n}\n\nreturn results.slice(-5);\n"
+      },
+      "id": "10000000-0000-0000-0000-000000000004",
+      "name": "Parse & Auto-Translate to English",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/v1/incidents",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "continueOnFail": true,
+      "id": "10000000-0000-0000-0000-000000000005",
+      "name": "Send to FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1080,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Every 15m)": {
+      "main": [
+        [
+          {
+            "node": "Channel List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel List": {
+      "main": [
+        [
+          {
+            "node": "Fetch Channel HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Channel HTML": {
+      "main": [
+        [
+          {
+            "node": "Parse & Auto-Translate to English",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Auto-Translate to English": {
+      "main": [
+        [
+          {
+            "node": "Send to FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

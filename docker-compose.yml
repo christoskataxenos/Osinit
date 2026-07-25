@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: osint_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: osint_user
+      POSTGRES_PASSWORD: osint_password
+      POSTGRES_DB: osint_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osint_user -d osint_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - osint_net
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: osint_n8n
+    restart: always
+    environment:
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost:5678/
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n_workflows:/n8n_workflows
+    networks:
+      - osint_net
+
+  tor-proxy:
+    image: dperson/torproxy
+    container_name: osint_tor_proxy
+    restart: always
+    ports:
+      - "9050:9050"
+    networks:
+      - osint_net
+
+  key-manager:
+    build: ./key_manager
+    container_name: osint_key_manager
+    restart: always
+    ports:
+      - "8002:8002"
+    depends_on:
+      - postgres
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://osint_user:osint_password@postgres:5432/osint_db
+      - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY:-osinit_default_secret_key_32_bytes_len!}
+    networks:
+      - osint_net
+
+  api:
+    build: ./backend
+    container_name: osint_api
+    restart: always
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - key-manager
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://osint_user:osint_password@postgres:5432/osint_db
+      - KEY_MANAGER_URL=http://key-manager:8002
+      - INGESTION_API_KEY=${INGESTION_API_KEY:-osinit-beta-secret-key}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/api/v1/health\")' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - osint_net
+
+  worker:
+    build: ./worker
+    container_name: osint_worker
+    restart: always
+    depends_on:
+      - tor-proxy
+      - api
+    environment:
+      - TOR_PROXY_HOST=tor-proxy
+      - TOR_PROXY_PORT=9050
+      - API_URL=http://api:8000/api/v1/incidents
+      - INGESTION_API_KEY=${INGESTION_API_KEY:-osinit-beta-secret-key}
+    networks:
+      - osint_net
+
+  telegram-bot:
+    build: ./telegram_bot
+    container_name: osint_telegram_bot
+    restart: always
+    depends_on:
+      - api
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - API_URL=http://api:8000/api/v1/incidents
+      - INGESTION_API_KEY=${INGESTION_API_KEY:-osinit-beta-secret-key}
+    networks:
+      - osint_net
+
+  ui:
+    build: ./frontend
+    container_name: osint_ui
+    restart: always
+    ports:
+      - "3000:3000"
+    networks:
+      - osint_net
+
+networks:
+  osint_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  n8n_data:

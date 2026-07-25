@@ -1,0 +1,114 @@
+{
+  "name": "OSINT Telegram Public Channel Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Schedule Trigger (Every 15m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://t.me/s/MAKS23",
+        "options": {
+          "neverError": true,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "continueOnFail": true,
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Fetch Telegram Channel Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itemJson = ($input.item && $input.item.json) ? $input.item.json : {};\nconst html = itemJson.body || \"\";\nconst channelUsername = \"MAKS23\";\nconst results = [];\nif (!html) return results;\n\nconst wraps = html.split('<div class=\"tgme_widget_message_wrap');\nfor (let i = 1; i < wraps.length; i++) {\n  const wrap = wraps[i];\n  const postMatch = /data-post=\"([^\"]+)\"/.exec(wrap);\n  if (!postMatch) continue;\n  const postPath = postMatch[1];\n\n  const textMatch = /<div class=\"tgme_widget_message_text[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/.exec(wrap);\n  const rawText = textMatch ? textMatch[1] : \"\";\n  const cleanText = rawText.replace(/<[^>]+>/g, '').trim();\n  if (!cleanText) continue;\n\n  const timeMatch = /<time[^>]*datetime=\"([^\"]+)\"/.exec(wrap);\n  const isoDate = timeMatch ? timeMatch[1] : new Date().toISOString();\n\n  const lines = cleanText.split('\\n').map(l => l.trim()).filter(Boolean);\n  const title = lines[0] ? lines[0].substring(0, 200) : \"Telegram Channel Update\";\n\n  results.push({\n    json: {\n      title: `[@${channelUsername}] ${title}`,\n      description: cleanText,\n      source_name: `Telegram Channel (@${channelUsername})`,\n      source_url: `https://t.me/${postPath}`,\n      is_darknet: false,\n      date_reported: isoDate\n    }\n  });\n}\n\nreturn results.slice(-10);\n"
+      },
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "Parse Channel HTML Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/v1/incidents",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "continueOnFail": true,
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "Send to FastAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Every 15m)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Telegram Channel Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Telegram Channel Page": {
+      "main": [
+        [
+          {
+            "node": "Parse Channel HTML Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Channel HTML Posts": {
+      "main": [
+        [
+          {
+            "node": "Send to FastAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

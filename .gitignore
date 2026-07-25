@@ -1,0 +1,27 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+*.env
+
+# Node & React Frontend
+node_modules/
+dist/
+build/
+.npm
+*.log
+package-lock.json.log
+
+# Docker Data Volumes
+postgres_data/
+n8n_data/
+
+# OS & Editor Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
