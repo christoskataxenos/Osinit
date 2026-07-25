@@ -7,6 +7,7 @@ import { MasterBriefingModal } from './MasterBriefingModal';
 import { ToastContainer, ToastMessage } from './Toast';
 import { ExportModal } from './ExportModal';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { getApiBaseUrl } from '../utils/textUtils';
 
 export const Dashboard: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -77,7 +78,7 @@ export const Dashboard: React.FC = () => {
     }
 
     const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
-    const url = `http://localhost:8001/api/v1/incidents${queryString}`;
+    const url = `${getApiBaseUrl()}/api/v1/incidents${queryString}`;
 
     try {
       const response = await fetch(url);

@@ -36,3 +36,15 @@ export function cleanTitle(title: string | null | undefined): string {
   if (!decoded) return '';
   return decoded.trim();
 }
+
+/**
+ * Δυναμική επιστροφή της διεύθυνσης του API Backend με βάση την IP/hostname του browser.
+ */
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const host = window.location.hostname || 'localhost';
+    return `${protocol}//${host}:8001`;
+  }
+  return 'http://localhost:8001';
+}

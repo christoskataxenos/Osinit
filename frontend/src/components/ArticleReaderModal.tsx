@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Incident, IsolatedContent } from '../types';
-import { decodeHtmlEntities, cleanTitle } from '../utils/textUtils';
+import { decodeHtmlEntities, cleanTitle, getApiBaseUrl } from '../utils/textUtils';
 
 interface ArticleReaderModalProps {
   incident: Incident | null;
@@ -118,7 +118,7 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({ incident
 
     const fetchIsolatedContent = async () => {
       try {
-        const response = await fetch(`http://localhost:8001/api/v1/incidents/${incident.id}/isolated-content`);
+        const response = await fetch(`${getApiBaseUrl()}/api/v1/incidents/${incident.id}/isolated-content`);
         if (!response.ok) {
           throw new Error(`HTTP Error ${response.status}: Failed to fetch isolated content`);
         }
@@ -126,7 +126,7 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({ incident
         
         // Αυτόματη παραγωγή πλήρους άρθρου με AI αυτόματα κατά το άνοιγμα της συγκεκριμένης είδησης!
         try {
-          const expandRes = await fetch(`http://localhost:8001/api/v1/incidents/${incident.id}/expand-ai`, {
+          const expandRes = await fetch(`${getApiBaseUrl()}/api/v1/incidents/${incident.id}/expand-ai`, {
             method: 'POST',
           });
           if (expandRes.ok) {
@@ -187,7 +187,7 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({ incident
     if (!incident) return;
     setIsGeneratingAI(true);
     try {
-      const res = await fetch(`http://localhost:8001/api/v1/incidents/${incident.id}/expand-ai`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/v1/incidents/${incident.id}/expand-ai`, {
         method: 'POST',
       });
       if (res.ok) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { decodeHtmlEntities } from '../utils/textUtils';
+import { decodeHtmlEntities, getApiBaseUrl } from '../utils/textUtils';
 
 interface MasterBriefingModalProps {
   hours: number;
@@ -91,7 +91,7 @@ export const MasterBriefingModal: React.FC<MasterBriefingModalProps> = ({ hours,
 
     const fetchMasterBriefing = async () => {
       try {
-        const response = await fetch(`http://localhost:8001/api/v1/incidents/master-briefing?hours=${hours}`);
+        const response = await fetch(`${getApiBaseUrl()}/api/v1/incidents/master-briefing?hours=${hours}`);
         if (!response.ok) {
           throw new Error(`HTTP Error ${response.status}: Failed to generate master briefing`);
         }
